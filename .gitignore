@@ -4,6 +4,7 @@ build/
 .kotlin/
 .idea/
 .gradle-home/
+.android-home/
 .tmp/
 
 

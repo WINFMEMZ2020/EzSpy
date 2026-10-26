@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="color_primary">#B9A5FF</color>
+    <color name="color_primary_variant">#8C6BFF</color>
+    <color name="color_on_primary">#241A4D</color>
+    <color name="color_secondary">#C9B8FF</color>
+    <color name="color_on_secondary">#241A4D</color>
+    <color name="color_accent">#B9A5FF</color>
+    <color name="color_accent_container">#282143</color>
+    <color name="color_tree_guide">#32323E</color>
+    <color name="color_tree_guide_selected">#6D5A9E</color>
+    <color name="color_accent_ripple">#33B9A5FF</color>
+    <color name="color_accent_glow">#1FB9A5FF</color>
+    <color name="color_icon_circle">#1FB9A5FF</color>
+    <color name="color_root_badge_bg">#2A2440</color>
+    <color name="color_root_badge_text">#C9B8FF</color>
+
+    <color name="color_background">#0E0E12</color>
+    <color name="color_surface">#17171C</color>
+    <color name="color_on_background">#ECECF1</color>
+    <color name="color_on_surface">#ECECF1</color>
+    <color name="color_text_primary">#ECECF1</color>
+    <color name="color_text_secondary">#9C9DA8</color>
+    <color name="color_text_tertiary">#71727C</color>
+    <color name="color_divider">#26262E</color>
+    <color name="color_error">#F2B8B5</color>
+
+    <color name="color_button_bg">#6E4BE8</color>
+    <color name="color_button_text">#FFFFFFFF</color>
+    <color name="color_status_ready">#B9A5FF</color>
+    <color name="color_status_missing">#71727C</color>
+
+    <color name="overlay_panel_bg">#F71B1B22</color>
+    <color name="overlay_panel_border">#32323C</color>
+    <color name="overlay_text_primary">#ECECF1</color>
+    <color name="overlay_text_secondary">#9C9DA8</color>
+    <color name="overlay_divider">#2B2B34</color>
+    <color name="overlay_accent">#C9B8FF</color>
+    <color name="overlay_ball_bg">#B3000000</color>
+    <color name="overlay_ball_stroke">#40FFFFFF</color>
+    <color name="overlay_ball_ring">#C9B8FF</color>
+    <color name="overlay_crosshair">#F5FFFFFF</color>
+    <color name="overlay_crosshair_halo">#80000000</color>
+    <color name="overlay_highlight">#C4C8D0</color>
+    <color name="overlay_highlight_halo">#80000000</color>
+</resources>

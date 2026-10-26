@@ -1,3 +1,61 @@
 <resources>
     <string name="app_name">EzSpy</string>
+
+    <string name="tab_grabber">抓取器</string>
+    <string name="tab_tree">节点树</string>
+    <string name="tab_properties">属性栏</string>
+
+    <!-- Grabber -->
+    <string name="grab_start">启用抓取器</string>
+    <string name="grab_status_accessibility">无障碍</string>
+    <string name="grab_status_overlay">悬浮窗</string>
+    <string name="grab_status_ready_suffix">已就绪</string>
+    <string name="grab_status_missing_suffix">未开启</string>
+    <string name="grab_hint">启动后主界面最小化，拖动准星选择控件</string>
+    <string name="grab_start_failed_service">无障碍服务未就绪，请稍后重试</string>
+    <string name="grab_start_failed_overlay">无法创建悬浮窗，请检查悬浮窗权限</string>
+    <string name="dialog_accessibility_title">开启无障碍服务</string>
+    <string name="dialog_accessibility_message">EzSpy 需要无障碍服务来读取窗口节点与属性。\n\n请在系统设置中找到 EzSpy 并开启服务。开启后返回本应用，再次点击「启用抓取器」。\n\nEzSpy 不会采集或上传任何屏幕内容。</string>
+    <string name="dialog_overlay_title">开启悬浮窗权限</string>
+    <string name="dialog_overlay_message">悬浮准星需要悬浮窗权限才能显示在其他应用上方。\n\n请允许 EzSpy 显示在其他应用的上层。授权后返回本应用，再次点击「启用抓取器」。</string>
+    <string name="dialog_go_settings">去开启</string>
+    <string name="dialog_later">稍后</string>
+    <string name="settings_open_failed">无法打开系统设置</string>
+    <string name="grab_ready_content_description">权限已就绪</string>
+
+    <!-- Empty states -->
+    <string name="tree_empty_title">尚无节点</string>
+    <string name="tree_empty_hint">启动抓取器并选择控件后，这里会显示从根节点到该控件的层级路径。</string>
+    <string name="properties_empty_title">尚无属性</string>
+    <string name="properties_empty_hint">在节点树中点击任意节点，即可查看它的全部属性。</string>
+    <string name="properties_copy_hint">点击任意属性可复制其值</string>
+    <string name="copied">已复制「%1$s」</string>
+    <string name="root_badge">ROOT</string>
+    <string name="get_text_button">获取文本</string>
+    <string name="property_label_text">文本</string>
+    <string name="get_text_dialog_title">节点文本</string>
+    <string name="get_text_copy">复制</string>
+    <string name="get_text_close">关闭</string>
+    <string name="tree_title_full">完整节点树</string>
+    <string name="tree_meta_format">%1$s · %2$d 个节点%3$s</string>
+    <string name="tree_truncated_suffix"> · 已截断</string>
+    <string name="tree_target_unknown">未知窗口</string>
+
+    <!-- Floating overlay -->
+    <string name="overlay_preview_title">预览</string>
+    <string name="overlay_back">返回主界面</string>
+    <string name="overlay_empty_title">准星未选中控件</string>
+    <string name="overlay_empty_hint">按住左侧悬浮球拖动准星</string>
+    <string name="overlay_footer">返回后可查看全部属性</string>
+    <string name="overlay_class">类名</string>
+    <string name="overlay_text">文本</string>
+    <string name="overlay_id">ID</string>
+    <string name="overlay_bounds">边界</string>
+    <string name="overlay_package">包名</string>
+    <string name="overlay_ball_desc">悬浮准星手柄：按住拖动准星，点按找回预览窗</string>
+
+    <!-- Accessibility service -->
+    <string name="accessibility_service_label">EzSpy 窗口嗅探</string>
+    <string name="accessibility_service_description">读取当前屏幕的窗口节点与属性，用于开发调试。仅在您主动开启抓取时工作，不采集或上传任何数据。</string>
+    <string name="accessibility_service_summary">读取窗口节点与属性</string>
 </resources>

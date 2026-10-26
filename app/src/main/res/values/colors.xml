@@ -1,5 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Brand / accent -->
+    <color name="color_primary">#5F3DC4</color>
+    <color name="color_primary_variant">#4527A0</color>
+    <color name="color_on_primary">#FFFFFFFF</color>
+    <color name="color_secondary">#6247D6</color>
+    <color name="color_on_secondary">#FFFFFFFF</color>
+    <color name="color_accent">#5F3DC4</color>
+    <color name="color_accent_container">#DCCEFF</color>
+    <color name="color_tree_guide">#D2D2DF</color>
+    <color name="color_tree_guide_selected">#B49CEB</color>
+    <color name="color_accent_ripple">#1F5F3DC4</color>
+    <color name="color_accent_glow">#145F3DC4</color>
+    <color name="color_icon_circle">#125F3DC4</color>
+    <color name="color_root_badge_bg">#EDE7FF</color>
+    <color name="color_root_badge_text">#5F3DC4</color>
+
+    <!-- Surfaces -->
+    <color name="color_background">#F5F5FA</color>
+    <color name="color_surface">#FFFFFFFF</color>
+    <color name="color_on_background">#17181D</color>
+    <color name="color_on_surface">#17181D</color>
+    <color name="color_text_primary">#17181D</color>
+    <color name="color_text_secondary">#6D6F78</color>
+    <color name="color_text_tertiary">#9A9CA4</color>
+    <color name="color_divider">#E7E7EE</color>
+    <color name="color_error">#B3261E</color>
+
+    <!-- Buttons and status -->
+    <color name="color_button_bg">#5F3DC4</color>
+    <color name="color_button_text">#FFFFFFFF</color>
+    <color name="color_status_ready">#5F3DC4</color>
+    <color name="color_status_missing">#A0A2AA</color>
+
+    <!-- Floating overlay (light) -->
+    <color name="overlay_panel_bg">#FAFFFFFF</color>
+    <color name="overlay_panel_border">#E3E3EA</color>
+    <color name="overlay_text_primary">#15161A</color>
+    <color name="overlay_text_secondary">#6C6E77</color>
+    <color name="overlay_divider">#E8E8EE</color>
+    <color name="overlay_accent">#5F3DC4</color>
+    <color name="overlay_ball_bg">#99000000</color>
+    <color name="overlay_ball_stroke">#4DFFFFFF</color>
+    <color name="overlay_ball_ring">#C9B8FF</color>
+    <color name="overlay_crosshair">#F2FFFFFF</color>
+    <color name="overlay_crosshair_halo">#73000000</color>
+    <color name="overlay_highlight">#A8ADB6</color>
+    <color name="overlay_highlight_halo">#59000000</color>
 </resources>
