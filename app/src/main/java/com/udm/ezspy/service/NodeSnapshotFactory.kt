@@ -50,6 +50,7 @@ class NodeSnapshotFactory(
         val viewId = safe { node.viewIdResourceName }
         val packageName = safe { node.packageName?.toString() }
         val appLabel = resolveAppLabel(packageName)
+        val isSensitive = safe { node.isPassword } == true
 
         return NodeSnapshot(
             className = className,
@@ -60,6 +61,7 @@ class NodeSnapshotFactory(
             appLabel = appLabel,
             bounds = bounds,
             depth = depth,
+            isSensitive = isSensitive,
             propertyGroups = buildPropertyGroups(
                 node = node,
                 depth = depth,
@@ -69,6 +71,7 @@ class NodeSnapshotFactory(
                 viewId = viewId,
                 packageName = packageName,
                 appLabel = appLabel,
+                isSensitive = isSensitive,
             ),
         )
     }
@@ -154,6 +157,7 @@ class NodeSnapshotFactory(
         viewId: String?,
         packageName: String?,
         appLabel: String?,
+        isSensitive: Boolean,
     ): List<PropertyGroup> {
         val groups = ArrayList<PropertyGroup>(6)
 
@@ -165,9 +169,10 @@ class NodeSnapshotFactory(
                 label = "文本",
                 value = displayText ?: "无",
                 kind = if (displayText == null) PropertyValueKind.MUTED else PropertyValueKind.NORMAL,
+                sensitive = isSensitive && displayText != null,
             )
         )
-        basic.textRow("内容描述", contentDescription)
+        basic.textRow("内容描述", contentDescription, sensitive = isSensitive)
         basic.textRow("提示文本", safe { node.hintText?.toString() })
         basic.textRow("错误信息", safe { node.error?.toString() })
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -365,10 +370,14 @@ class NodeSnapshotFactory(
 
     private inline fun <T> safe(block: () -> T?): T? = runCatching { block() }.getOrNull()
 
-    private fun MutableList<PropertyRow>.textRow(label: String, value: String?) {
+    private fun MutableList<PropertyRow>.textRow(
+        label: String,
+        value: String?,
+        sensitive: Boolean = false,
+    ) {
         val clean = value?.trim()
         if (!clean.isNullOrEmpty()) {
-            add(PropertyRow(label, clean))
+            add(PropertyRow(label, clean, sensitive = sensitive))
         }
     }
 

@@ -2,6 +2,7 @@ package com.udm.ezspy
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
@@ -13,6 +14,8 @@ import androidx.fragment.app.FragmentActivity
 import androidx.viewpager2.adapter.FragmentStateAdapter
 import androidx.viewpager2.widget.ViewPager2
 import com.google.android.material.tabs.TabLayoutMediator
+import com.udm.ezspy.data.PrivacySettings
+import com.udm.ezspy.data.SessionEndReason
 import com.udm.ezspy.data.SpyRepository
 import com.udm.ezspy.databinding.ActivityMainBinding
 import com.udm.ezspy.service.EzSpyAccessibilityService
@@ -28,6 +31,20 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (savedInstanceState == null) {
+            // The privacy switches are deliberately not persisted.
+            PrivacySettings.reset()
+        }
+        // Sensitive node text must not leak into recents thumbnails or
+        // screenshots by default.
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        PrivacySettings.disableSecureScreen.observe(this) { disabled ->
+            if (disabled) {
+                window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            } else {
+                window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+            }
+        }
         enableEdgeToEdge()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -38,11 +55,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        // The floating overlay is dismissed here (and, when the user opened the
-        // app manually while grabbing, the current selection is kept).
+        // The preview's back button dismisses the overlay; opening the app
+        // manually keeps the temporary session and its floating panel alive.
         EzSpyAccessibilityService.instance?.onMainUiResumed()
-        // Enable the "task removed from recents" watchdog.
-        EzSpyAccessibilityService.instance?.onMainUiShown()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -94,7 +109,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun observeCaptureResults() {
         SpyRepository.result.observe(this) { result ->
-            if (result == null) return@observe
+            if (result == null) {
+                // Stop / timeout / task removal also clears the UI state, so a
+                // stale tree can never be shown again.
+                viewModel.beginNewGrab()
+                return@observe
+            }
             if (!viewModel.applyResult(result)) return@observe
 
             val hasCapture = result.capture?.nodes?.isNotEmpty() == true
@@ -115,13 +135,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        val shouldShutdown = isFinishing && !isChangingConfigurations
+        val shouldFinish = isFinishing && !isChangingConfigurations
         super.onDestroy()
-        if (shouldShutdown) {
-            // A true privacy exit: recents swipe / back finishes the task.
-            // Disable the accessibility service and end the process so the
-            // system cannot keep the app alive in the background.
-            EzSpyAccessibilityService.instance?.shutdownFromTaskRemoval()
+        if (shouldFinish) {
+            // A temporary tool should not leave a capture behind as a back
+            // press / task removal destroys the UI.
+            val service = EzSpyAccessibilityService.instance
+            if (service != null) {
+                service.onMainUiFinished()
+            } else {
+                SpyRepository.clear()
+                SpyRepository.endSession(SessionEndReason.ACTIVITY_FINISHED)
+            }
         }
     }
 

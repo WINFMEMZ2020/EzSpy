@@ -2,40 +2,149 @@ package com.udm.ezspy.ui.grabber
 
 import android.content.Context
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.View
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.udm.ezspy.MainActivity
 import com.udm.ezspy.R
+import com.udm.ezspy.data.PrivacySettings
+import com.udm.ezspy.data.SESSION_TIMEOUT_MS
+import com.udm.ezspy.data.SessionEndReason
+import com.udm.ezspy.data.SessionState
+import com.udm.ezspy.data.SpyRepository
 import com.udm.ezspy.databinding.FragmentGrabberBinding
 import com.udm.ezspy.service.EzSpyAccessibilityService
 import com.udm.ezspy.util.PermissionUtils
+import com.udm.ezspy.util.formatElapsed
 
 class GrabberFragment : Fragment(R.layout.fragment_grabber) {
 
     private var _binding: FragmentGrabberBinding? = null
     private val binding: FragmentGrabberBinding get() = _binding!!
 
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val sessionTicker = object : Runnable {
+        override fun run() {
+            if (_binding == null) return
+            renderSession()
+            handler.postDelayed(this, TICK_MS)
+        }
+    }
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         _binding = FragmentGrabberBinding.bind(view)
         binding.grabButton.setOnClickListener { onGrabClicked() }
+        binding.stopButton.setOnClickListener { stopSession() }
+        setupPrivacyControls()
+        SpyRepository.session.observe(viewLifecycleOwner) { renderSession() }
         updatePermissionStatus()
+        renderSession()
     }
 
     override fun onResume() {
         super.onResume()
-        if (_binding != null) updatePermissionStatus()
+        if (_binding != null) {
+            updatePermissionStatus()
+            handler.removeCallbacks(sessionTicker)
+            handler.post(sessionTicker)
+        }
+    }
+
+    override fun onPause() {
+        handler.removeCallbacks(sessionTicker)
+        super.onPause()
     }
 
     override fun onDestroyView() {
+        handler.removeCallbacks(sessionTicker)
         _binding = null
         super.onDestroyView()
+    }
+
+    private fun setupPrivacyControls() {
+        binding.showSensitiveCheck.isChecked =
+            PrivacySettings.showSensitiveContent.value == true
+        binding.showSensitiveCheck.setOnCheckedChangeListener { _, checked ->
+            PrivacySettings.showSensitiveContent.value = checked
+        }
+        PrivacySettings.showSensitiveContent.observe(viewLifecycleOwner) { checked ->
+            if (binding.showSensitiveCheck.isChecked != checked) {
+                binding.showSensitiveCheck.isChecked = checked
+            }
+        }
+
+        binding.unlimitedSessionCheck.isChecked =
+            PrivacySettings.unlimitedSession.value == true
+        binding.unlimitedSessionCheck.setOnCheckedChangeListener { _, checked ->
+            PrivacySettings.unlimitedSession.value = checked
+        }
+        PrivacySettings.unlimitedSession.observe(viewLifecycleOwner) { checked ->
+            if (binding.unlimitedSessionCheck.isChecked != checked) {
+                binding.unlimitedSessionCheck.isChecked = checked
+            }
+        }
+
+        binding.disableSecureCheck.isChecked =
+            PrivacySettings.disableSecureScreen.value == true
+        binding.disableSecureCheck.setOnCheckedChangeListener { _, checked ->
+            PrivacySettings.disableSecureScreen.value = checked
+        }
+        PrivacySettings.disableSecureScreen.observe(viewLifecycleOwner) { checked ->
+            if (binding.disableSecureCheck.isChecked != checked) {
+                binding.disableSecureCheck.isChecked = checked
+            }
+        }
+    }
+
+    private fun renderSession() {
+        if (_binding == null) return
+        val state = SpyRepository.session.value ?: SessionState()
+        val now = SystemClock.elapsedRealtime()
+        val status = when {
+            state.active -> {
+                val limit = if (state.unlimited) {
+                    getString(R.string.session_unlimited)
+                } else {
+                    formatElapsed(SESSION_TIMEOUT_MS)
+                }
+                getString(
+                    R.string.session_running_format,
+                    formatElapsed(state.elapsedMs(now)),
+                    limit,
+                )
+            }
+
+            state.startedAtElapsed > 0L -> {
+                val reason = when (state.endReason) {
+                    SessionEndReason.TIMEOUT -> R.string.session_timeout
+                    SessionEndReason.RETURNED -> R.string.session_returned
+                    else -> R.string.session_stopped
+                }
+                getString(
+                    R.string.session_ended_format,
+                    getString(reason),
+                    formatElapsed(state.elapsedMs(now)),
+                )
+            }
+
+            else -> getString(R.string.session_idle)
+        }
+
+        binding.sessionStatusText.text = status
+        binding.stopButton.isVisible = state.active
+        binding.grabButton.isEnabled = !state.active
+        binding.unlimitedSessionCheck.isEnabled = !state.active
     }
 
     private fun updatePermissionStatus() {
@@ -118,6 +227,7 @@ class GrabberFragment : Fragment(R.layout.fragment_grabber) {
 
     private fun onGrabClicked() {
         val context = requireContext()
+        if (SpyRepository.session.value?.active == true) return
         if (!PermissionUtils.isAccessibilityServiceEnabled(context)) {
             showAccessibilityDialog()
             return
@@ -132,13 +242,24 @@ class GrabberFragment : Fragment(R.layout.fragment_grabber) {
             showToast(R.string.grab_start_failed_service)
             return
         }
-        if (!service.startGrab()) {
+        val unlimited = PrivacySettings.unlimitedSession.value == true
+        if (!service.startGrab(unlimited)) {
             showToast(R.string.grab_start_failed_overlay)
             return
         }
 
         (requireActivity() as MainActivity).onGrabStarted()
         requireActivity().moveTaskToBack(true)
+    }
+
+    private fun stopSession() {
+        val service = EzSpyAccessibilityService.instance
+        if (service != null) {
+            service.stopSessionAndDiscard(SessionEndReason.STOPPED)
+        } else {
+            SpyRepository.clear()
+            SpyRepository.endSession(SessionEndReason.STOPPED)
+        }
     }
 
     private fun showAccessibilityDialog() {
@@ -170,5 +291,9 @@ class GrabberFragment : Fragment(R.layout.fragment_grabber) {
     private fun showToast(resId: Int) {
         val context: Context = requireContext()
         Toast.makeText(context, resId, Toast.LENGTH_SHORT).show()
+    }
+
+    private companion object {
+        const val TICK_MS = 1000L
     }
 }

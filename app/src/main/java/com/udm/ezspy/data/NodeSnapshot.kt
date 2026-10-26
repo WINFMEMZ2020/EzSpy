@@ -18,6 +18,8 @@ data class NodeSnapshot(
     val bounds: Rect,
     /** Depth inside the captured window tree; the window root is 0. */
     val depth: Int,
+    /** True for password fields; their content is masked unless the user opts in. */
+    val isSensitive: Boolean,
     val propertyGroups: List<PropertyGroup>,
 ) {
     val simpleClassName: String
@@ -35,11 +37,19 @@ data class NodeSnapshot(
             ?.let { if (it.contains(":id/")) it.substringAfter(":id/") else it }
             ?.takeIf { it.isNotBlank() }
 
+    fun textForDisplay(showSensitive: Boolean): String? =
+        if (isSensitive && !showSensitive) MASKED_TEXT else text
+
+    fun contentDescriptionForDisplay(showSensitive: Boolean): String? =
+        if (isSensitive && !showSensitive) MASKED_TEXT else contentDescription
+
     /** Secondary line used in the node tree. */
-    val secondaryLabel: String
-        get() = shortViewId?.let { "id/$it" }
-            ?: text?.trim()?.takeIf { it.isNotEmpty() }?.let { singleLine(it) }
-            ?: contentDescription?.trim()?.takeIf { it.isNotEmpty() }?.let { singleLine(it) }
+    fun secondaryLabel(showSensitive: Boolean): String =
+        shortViewId?.let { "id/$it" }
+            ?: textForDisplay(showSensitive)?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { singleLine(it) }
+            ?: contentDescriptionForDisplay(showSensitive)?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { singleLine(it) }
             ?: "无文本 / ID"
 
     val boundsText: String
@@ -49,6 +59,10 @@ data class NodeSnapshot(
     private fun singleLine(value: String): String {
         val oneLine = value.replace('\n', ' ').replace('\r', ' ')
         return if (oneLine.length <= 80) oneLine else oneLine.take(79) + "…"
+    }
+
+    companion object {
+        const val MASKED_TEXT = "••••"
     }
 }
 

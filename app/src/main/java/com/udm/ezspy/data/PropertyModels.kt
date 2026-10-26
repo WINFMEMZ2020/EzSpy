@@ -15,6 +15,8 @@ data class PropertyRow(
     val label: String,
     val value: String,
     val kind: PropertyValueKind = PropertyValueKind.NORMAL,
+    /** Hide the value behind bullets until the user enables sensitive content. */
+    val sensitive: Boolean = false,
 )
 
 data class PropertyGroup(

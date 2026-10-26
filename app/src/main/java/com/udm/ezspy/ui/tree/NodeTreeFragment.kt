@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.udm.ezspy.MainActivity
 import com.udm.ezspy.R
+import com.udm.ezspy.data.PrivacySettings
 import com.udm.ezspy.databinding.FragmentNodeTreeBinding
 import com.udm.ezspy.ui.SpyViewModel
 import kotlin.math.max
@@ -20,6 +21,7 @@ class NodeTreeFragment : Fragment(R.layout.fragment_node_tree) {
 
     private lateinit var adapter: NodeTreeAdapter
     private var lastScrolledSession = -1L
+    private var currentState: SpyViewModel.UiState? = null
 
     private val viewModel: SpyViewModel by lazy {
         ViewModelProvider(requireActivity())[SpyViewModel::class.java]
@@ -37,15 +39,22 @@ class NodeTreeFragment : Fragment(R.layout.fragment_node_tree) {
         binding.recycler.adapter = adapter
         binding.recycler.itemAnimator = null
 
-        viewModel.state.observe(viewLifecycleOwner) { state -> render(state) }
+        viewModel.state.observe(viewLifecycleOwner) { state ->
+            currentState = state
+            render(state)
+        }
+        PrivacySettings.showSensitiveContent.observe(viewLifecycleOwner) {
+            currentState?.let(::render)
+        }
     }
 
     private fun render(state: SpyViewModel.UiState) {
+        val showSensitive = PrivacySettings.showSensitiveContent.value == true
         binding.treeContent.isVisible = state.hasData
         binding.emptyState.isVisible = !state.hasData
 
         if (!state.hasData) {
-            adapter.submit(emptyList(), -1)
+            adapter.submit(emptyList(), -1, showSensitive)
             lastScrolledSession = -1L
             return
         }
@@ -62,7 +71,7 @@ class NodeTreeFragment : Fragment(R.layout.fragment_node_tree) {
         )
 
         applyTreeWidth(state)
-        adapter.submit(state.nodes, state.selectedIndex)
+        adapter.submit(state.nodes, state.selectedIndex, showSensitive)
 
         if (state.sessionId != lastScrolledSession) {
             lastScrolledSession = state.sessionId

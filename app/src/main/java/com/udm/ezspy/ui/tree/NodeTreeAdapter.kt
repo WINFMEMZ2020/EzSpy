@@ -23,11 +23,13 @@ class NodeTreeAdapter(
 
     private var nodes: List<NodeSnapshot> = emptyList()
     private var selectedIndex: Int = -1
+    private var showSensitive = false
 
     @SuppressLint("NotifyDataSetChanged")
-    fun submit(nodes: List<NodeSnapshot>, selectedIndex: Int) {
+    fun submit(nodes: List<NodeSnapshot>, selectedIndex: Int, showSensitive: Boolean) {
         this.nodes = nodes
         this.selectedIndex = selectedIndex
+        this.showSensitive = showSensitive
         notifyDataSetChanged()
     }
 
@@ -70,7 +72,8 @@ class NodeTreeAdapter(
         }
 
         holder.binding.title.text = node.displayTitle
-        holder.binding.subtitle.text = node.secondaryLabel
+        val subtitle = node.secondaryLabel(showSensitive)
+        holder.binding.subtitle.text = subtitle
         holder.binding.rootBadge.isVisible = node.depth == 0 && position == 0
         holder.binding.dot.imageTintList = ColorStateList.valueOf(
             ContextCompat.getColor(
@@ -83,7 +86,7 @@ class NodeTreeAdapter(
             append("第 ${node.depth + 1} 层 ")
             append(node.displayTitle)
             append("，")
-            append(node.secondaryLabel)
+            append(subtitle)
             if (selected) append("，已选中")
         }
     }

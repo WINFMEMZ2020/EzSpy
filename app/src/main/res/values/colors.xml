@@ -49,4 +49,5 @@
     <color name="overlay_crosshair_halo">#73000000</color>
     <color name="overlay_highlight">#A8ADB6</color>
     <color name="overlay_highlight_halo">#59000000</color>
+    <color name="overlay_recording">#FF3B30</color>
 </resources>

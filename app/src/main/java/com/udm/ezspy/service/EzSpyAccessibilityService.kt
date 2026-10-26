@@ -1,16 +1,16 @@
 package com.udm.ezspy.service
 
 import android.accessibilityservice.AccessibilityService
-import android.app.ActivityManager
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
-import android.os.Process
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.udm.ezspy.MainActivity
+import com.udm.ezspy.data.SESSION_TIMEOUT_MS
+import com.udm.ezspy.data.SessionEndReason
 import com.udm.ezspy.data.SpyRepository
 
 /**
@@ -18,7 +18,7 @@ import com.udm.ezspy.data.SpyRepository
  *
  * The service is always bound by the system while enabled, so no foreground
  * service / notification is required. Nothing is collected unless the user
- * explicitly starts grab mode from the main UI.
+ * explicitly starts a temporary grab session from the main UI.
  */
 class EzSpyAccessibilityService : AccessibilityService() {
 
@@ -28,35 +28,15 @@ class EzSpyAccessibilityService : AccessibilityService() {
             private set
 
         private const val RETURN_FALLBACK_MS = 2000L
-        private const val TASK_REMOVED_KILL_DELAY_MS = 300L
-        private const val TASK_WATCH_INTERVAL_MS = 1000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var overlay: OverlayController? = null
     private var pendingUiReturn = false
-    private var shuttingDown = false
-    private var seenAppTask = false
 
-    /**
-     * The accessibility service itself is bound by the system, so a recents
-     * swipe does not reliably deliver onTaskRemoved. Once the main UI has been
-     * seen, poll the app's own task list; when it disappears the whole app is
-     * torn down (and the accessibility service disabled) so nothing keeps
-     * running in the background.
-     */
-    private val taskWatcher = object : Runnable {
-        override fun run() {
-            if (shuttingDown) return
-            val count = appTaskCount()
-            if (count > 0) {
-                seenAppTask = true
-                handler.postDelayed(this, TASK_WATCH_INTERVAL_MS)
-            } else if (seenAppTask) {
-                shutdownFromTaskRemoval()
-            } else {
-                handler.postDelayed(this, TASK_WATCH_INTERVAL_MS)
-            }
+    private val sessionTimeout = Runnable {
+        if (overlay?.isShowing == true) {
+            stopSessionAndDiscard(SessionEndReason.TIMEOUT)
         }
     }
 
@@ -80,45 +60,58 @@ class EzSpyAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
 
-        // If the service connects after the main UI is already on screen,
-        // start the recents watchdog now instead of waiting for another resume.
-        if (appTaskCount() > 0) onMainUiShown()
+        // If the service reconnects after a session lost its overlay, close the
+        // stale session instead of leaving it marked as active.
+        if (SpyRepository.session.value?.active == true && overlay == null) {
+            stopSessionAndDiscard(SessionEndReason.SERVICE_STOPPED)
+        }
     }
 
     /**
      * Shows the floating UI. Must be called on the main thread.
+     * @param unlimited true when the user disabled the 3-minute session cap.
      * @return false when the overlay could not be created.
      */
-    fun startGrab(): Boolean {
+    fun startGrab(unlimited: Boolean): Boolean {
         if (overlay?.isShowing == true) return true
         if (!Settings.canDrawOverlays(this)) return false
 
         stopOverlay()
         pendingUiReturn = false
+        SpyRepository.clear()
+        SpyRepository.startSession(unlimited)
 
-        val controller = OverlayController(this) { returnToMain() }
+        val controller = OverlayController(
+            service = this,
+            onExitRequested = { returnToMain() },
+            onStopRequested = { stopSessionAndDiscard(SessionEndReason.STOPPED) },
+        )
         if (!controller.start()) {
             controller.stop()
+            SpyRepository.clear()
+            SpyRepository.endSession(SessionEndReason.STOPPED)
             return false
         }
 
         overlay = controller
-        SpyRepository.clear()
+        handler.removeCallbacks(sessionTimeout)
+        if (!unlimited) {
+            handler.postDelayed(sessionTimeout, SESSION_TIMEOUT_MS)
+        }
         return true
     }
 
     /**
      * Called from [MainActivity.onResume] / [MainActivity.onNewIntent].
      *
-     * There are two cases:
-     *  - the user pressed the preview's back button: the result is already
-     *    published and the overlay only has to be removed;
-     *  - the user opened EzSpy manually while grabbing: keep the current
-     *    selection and publish it before removing the overlay.
+     * The preview's back button publishes the result before the activity is
+     * brought forward, so that path only has to remove the overlay. Opening
+     * the main UI manually keeps the temporary session alive; the overlay
+     * panel stays visible and its back arrow remains the "complete and view"
+     * action, while the main page shows status and a stop control.
      */
     fun onMainUiResumed() {
-        val controller = overlay
-        if (controller == null) {
+        val controller = overlay ?: run {
             pendingUiReturn = false
             return
         }
@@ -126,18 +119,15 @@ class EzSpyAccessibilityService : AccessibilityService() {
         if (pendingUiReturn) {
             pendingUiReturn = false
             stopOverlay()
-            return
         }
-
-        val capture = controller.buildCapture()
-        stopOverlay()
-        SpyRepository.publish(capture)
+        // Manual open: keep the session and the floating panel untouched.
     }
 
     private fun returnToMain() {
         val controller = overlay ?: return
         val capture = controller.buildCapture()
         SpyRepository.publish(capture)
+        SpyRepository.endSession(SessionEndReason.RETURNED)
 
         pendingUiReturn = true
         // Keep the overlay on screen for a moment: a visible overlay window
@@ -160,9 +150,26 @@ class EzSpyAccessibilityService : AccessibilityService() {
 
     private fun stopOverlay() {
         handler.removeCallbacks(dismissFallback)
+        handler.removeCallbacks(sessionTimeout)
         pendingUiReturn = false
         overlay?.stop()
         overlay = null
+    }
+
+    /**
+     * Ends the current session and immediately discards its overlay and all
+     * in-memory capture data. Used by the explicit stop buttons, the timeout,
+     * task removal, and service shutdown.
+     */
+    fun stopSessionAndDiscard(reason: SessionEndReason) {
+        stopOverlay()
+        SpyRepository.clear()
+        SpyRepository.endSession(reason)
+    }
+
+    /** Called when the main activity is finishing (back press / task removal). */
+    fun onMainUiFinished() {
+        stopSessionAndDiscard(SessionEndReason.ACTIVITY_FINISHED)
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -179,66 +186,19 @@ class EzSpyAccessibilityService : AccessibilityService() {
         overlay?.onConfigurationChanged()
     }
 
-    /**
-     * The user swiped EzSpy out of the recents list: wipe the in-memory
-     * capture, remove the overlay, disable the accessibility service (so the
-     * system cannot rebind it and keep the app alive) and kill the process.
-     *
-     * The accessibility service has to be enabled again from system settings
-     * the next time the main UI is opened.
-     */
     override fun onTaskRemoved(rootIntent: Intent?) {
-        shutdownFromTaskRemoval()
+        stopSessionAndDiscard(SessionEndReason.TASK_REMOVED)
         super.onTaskRemoved(rootIntent)
     }
 
-    /**
-     * Called when the main task is removed from recents (from
-     * [MainActivity.onDestroy] when finishing, or from [onTaskRemoved] when
-     * the system happens to deliver it).
-     *
-     * Removing the accessibility service is required for a true shutdown:
-     * otherwise the system would rebind it and keep the app process alive.
-     */
-    /**
-     * Starts watching for the removal of the app's task. Called whenever the
-     * main UI is resumed (after the user has actually opened the app).
-     */
-    fun onMainUiShown() {
-        if (shuttingDown) return
-        val count = appTaskCount()
-        if (count > 0) seenAppTask = true
-        handler.removeCallbacks(taskWatcher)
-        handler.postDelayed(taskWatcher, TASK_WATCH_INTERVAL_MS)
-    }
-
-    fun shutdownFromTaskRemoval() {
-        if (shuttingDown) return
-        shuttingDown = true
-
-        handler.removeCallbacksAndMessages(null)
-        stopOverlay()
-        SpyRepository.clear()
-        runCatching { disableSelf() }
-        handler.postDelayed({
-            Process.killProcess(Process.myPid())
-        }, TASK_REMOVED_KILL_DELAY_MS)
-    }
-
-    private fun appTaskCount(): Int = runCatching {
-        getSystemService(ActivityManager::class.java)?.getAppTasks()?.size ?: 0
-    }.getOrDefault(0)
-
     override fun onUnbind(intent: Intent?): Boolean {
-        handler.removeCallbacks(taskWatcher)
-        stopOverlay()
+        stopSessionAndDiscard(SessionEndReason.SERVICE_STOPPED)
         instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
-        handler.removeCallbacks(taskWatcher)
-        stopOverlay()
+        stopSessionAndDiscard(SessionEndReason.SERVICE_STOPPED)
         instance = null
         super.onDestroy()
     }

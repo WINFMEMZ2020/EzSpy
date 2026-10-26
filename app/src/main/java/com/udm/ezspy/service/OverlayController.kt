@@ -8,6 +8,7 @@ import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -18,12 +19,16 @@ import androidx.core.view.isVisible
 import com.udm.ezspy.R
 import com.udm.ezspy.data.Capture
 import com.udm.ezspy.data.NodeSnapshot
+import com.udm.ezspy.data.PrivacySettings
+import com.udm.ezspy.data.SESSION_TIMEOUT_MS
+import com.udm.ezspy.data.SpyRepository
 import com.udm.ezspy.databinding.ItemOverlaySummaryBinding
 import com.udm.ezspy.databinding.OverlayPanelBinding
 import com.udm.ezspy.service.overlay.OverlayBallView
 import com.udm.ezspy.service.overlay.OverlayCrosshairView
 import com.udm.ezspy.service.overlay.OverlayHighlightView
 import com.udm.ezspy.util.dp
+import com.udm.ezspy.util.formatElapsed
 import com.udm.ezspy.util.screenSize
 import kotlin.math.max
 import kotlin.math.min
@@ -44,6 +49,7 @@ import kotlin.math.min
 class OverlayController(
     private val service: AccessibilityService,
     private val onExitRequested: () -> Unit,
+    private val onStopRequested: () -> Unit,
 ) {
 
     private val windowManager: WindowManager = service.getSystemService(WindowManager::class.java)
@@ -63,13 +69,23 @@ class OverlayController(
 
     private var showing = false
     private var exitRequested = false
+    private var stopRequested = false
     private var dragInProgress = false
     private var pendingPoint: PointF? = null
     private var lastPoint: PointF? = null
 
     private var currentKey: String? = null
+    private var startedAt = 0L
 
     private val hitRunnable = Runnable { performHitTest() }
+
+    private val statusTicker = object : Runnable {
+        override fun run() {
+            if (!showing) return
+            updateSessionStatus()
+            handler.postDelayed(this, STATUS_TICK_MS)
+        }
+    }
 
     private fun dp(value: Int): Int = service.dp(value.toFloat())
 
@@ -94,6 +110,7 @@ class OverlayController(
 
         val screen = service.screenSize()
         exitRequested = false
+        stopRequested = false
         dragInProgress = false
         pendingPoint = null
         lastPoint = null
@@ -177,14 +194,21 @@ class OverlayController(
         setupBall()
         showPanelNode(null)
         showing = true
+        startedAt = SpyRepository.session.value?.startedAtElapsed
+            ?: SystemClock.elapsedRealtime()
+        updateSessionStatus()
+        handler.postDelayed(statusTicker, STATUS_TICK_MS)
         return true
     }
 
     fun stop() {
         showing = false
         exitRequested = false
+        stopRequested = false
         dragInProgress = false
+        startedAt = 0L
         handler.removeCallbacks(hitRunnable)
+        handler.removeCallbacks(statusTicker)
         pendingPoint = null
         lastPoint = null
         currentKey = null
@@ -287,6 +311,7 @@ class OverlayController(
     private fun setupPanel() {
         val binding = panelBinding ?: return
         binding.backButton.setOnClickListener { requestExit() }
+        binding.stopButton.setOnClickListener { requestStop() }
 
         var startRawX = 0f
         var startRawY = 0f
@@ -330,6 +355,30 @@ class OverlayController(
         if (!showing || exitRequested) return
         exitRequested = true
         onExitRequested()
+    }
+
+    private fun requestStop() {
+        if (!showing || stopRequested) return
+        stopRequested = true
+        onStopRequested()
+    }
+
+    private fun updateSessionStatus() {
+        val binding = panelBinding ?: return
+        val state = SpyRepository.session.value
+        val start = state?.startedAtElapsed?.takeIf { it > 0L } ?: startedAt
+        if (start <= 0L) return
+        val elapsed = (SystemClock.elapsedRealtime() - start).coerceAtLeast(0L)
+        val limit = if (state?.unlimited == true) {
+            service.getString(R.string.session_unlimited)
+        } else {
+            formatElapsed(SESSION_TIMEOUT_MS)
+        }
+        binding.sessionStatus.text = service.getString(
+            R.string.session_running_format,
+            formatElapsed(elapsed),
+            limit,
+        )
     }
 
     private fun updateCrosshair(x: Float, y: Float) {
@@ -432,8 +481,11 @@ class OverlayController(
         addSummaryRow(
             binding,
             service.getString(R.string.overlay_text),
-            node.text?.takeIf { it.isNotBlank() }
-                ?: node.contentDescription?.takeIf { it.isNotBlank() }
+            node.textForDisplay(PrivacySettings.showSensitiveContent.value == true)
+                ?.takeIf { it.isNotBlank() }
+                ?: node.contentDescriptionForDisplay(
+                    PrivacySettings.showSensitiveContent.value == true
+                )?.takeIf { it.isNotBlank() }
                 ?: "—",
         )
         addSummaryRow(
@@ -502,5 +554,6 @@ class OverlayController(
     private companion object {
         const val HIT_TEST_INTERVAL_MS = 28L
         const val EXTERNAL_REFRESH_DELAY_MS = 160L
+        const val STATUS_TICK_MS = 1000L
     }
 }

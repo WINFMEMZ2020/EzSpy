@@ -12,6 +12,7 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.snackbar.Snackbar
 import com.udm.ezspy.R
 import com.udm.ezspy.data.NodeSnapshot
+import com.udm.ezspy.data.PrivacySettings
 import com.udm.ezspy.data.PropertyRow
 import com.udm.ezspy.databinding.DialogNodeTextBinding
 import com.udm.ezspy.databinding.FragmentPropertiesBinding
@@ -24,6 +25,7 @@ class PropertiesFragment : Fragment(R.layout.fragment_properties) {
 
     private lateinit var adapter: PropertiesAdapter
     private var lastNode: NodeSnapshot? = null
+    private var lastShowSensitive: Boolean? = null
     private var currentState: SpyViewModel.UiState? = null
 
     private val viewModel: SpyViewModel by lazy {
@@ -35,7 +37,7 @@ class PropertiesFragment : Fragment(R.layout.fragment_properties) {
         _binding = FragmentPropertiesBinding.bind(view)
 
         adapter = PropertiesAdapter(
-            onCopy = { row -> copyProperty(row) },
+            onCopy = { row, value -> copyProperty(row, value) },
             onGetText = { showNodeTextDialog() },
         )
         binding.recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -46,27 +48,33 @@ class PropertiesFragment : Fragment(R.layout.fragment_properties) {
             currentState = state
             render(state.selectedNode)
         }
+        PrivacySettings.showSensitiveContent.observe(viewLifecycleOwner) {
+            render(currentState?.selectedNode)
+        }
     }
 
     private fun render(node: NodeSnapshot?) {
+        val showSensitive = PrivacySettings.showSensitiveContent.value == true
         binding.recycler.isVisible = node != null
         binding.emptyState.isVisible = node == null
 
         if (node == null) {
-            adapter.submit(null)
+            adapter.submit(null, showSensitive)
             lastNode = null
+            lastShowSensitive = showSensitive
             return
         }
 
-        if (node == lastNode) return
+        if (node == lastNode && showSensitive == lastShowSensitive) return
         lastNode = node
-        adapter.submit(node)
+        lastShowSensitive = showSensitive
+        adapter.submit(node, showSensitive)
         binding.recycler.post { binding.recycler.scrollToPosition(0) }
     }
 
-    private fun copyProperty(row: PropertyRow) {
+    private fun copyProperty(row: PropertyRow, value: String) {
         val clipboard = requireContext().getSystemService(ClipboardManager::class.java)
-        clipboard?.setPrimaryClip(ClipData.newPlainText(row.label, row.value))
+        clipboard?.setPrimaryClip(ClipData.newPlainText(row.label, value))
         Snackbar.make(
             binding.root,
             getString(R.string.copied, row.label),
@@ -91,10 +99,11 @@ class PropertiesFragment : Fragment(R.layout.fragment_properties) {
         }
 
         val lines = ArrayList<String>()
+        val showSensitive = PrivacySettings.showSensitiveContent.value == true
         for (index in start until end) {
             val node = state.nodes[index]
-            val line = node.text?.trim()?.takeIf { it.isNotEmpty() }
-                ?: node.contentDescription?.trim()?.takeIf { it.isNotEmpty() }
+            val line = node.textForDisplay(showSensitive)?.trim()?.takeIf { it.isNotEmpty() }
+                ?: node.contentDescriptionForDisplay(showSensitive)?.trim()?.takeIf { it.isNotEmpty() }
             if (line != null) lines.add(line)
         }
         val text = lines.joinToString("\n")

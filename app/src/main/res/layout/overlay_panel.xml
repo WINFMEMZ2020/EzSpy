@@ -39,6 +39,22 @@
                 android:layout_height="1dp"
                 android:layout_weight="1" />
 
+            <TextView
+                android:id="@+id/stopButton"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:contentDescription="@string/overlay_stop"
+                android:focusable="true"
+                android:gravity="center"
+                android:minWidth="48dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="@string/overlay_stop"
+                android:textColor="@color/overlay_accent"
+                android:textSize="12sp" />
+
             <ImageButton
                 android:id="@+id/backButton"
                 android:layout_width="40dp"
@@ -53,6 +69,19 @@
             android:layout_width="match_parent"
             android:layout_height="1dp"
             android:background="@color/overlay_divider" />
+
+        <TextView
+            android:id="@+id/sessionStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="14dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="14dp"
+            android:paddingBottom="6dp"
+            android:text="@string/session_idle"
+            android:textColor="@color/overlay_accent"
+            android:textSize="11sp" />
 
         <FrameLayout
             android:layout_width="match_parent"

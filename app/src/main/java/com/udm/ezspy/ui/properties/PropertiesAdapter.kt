@@ -15,7 +15,7 @@ import com.udm.ezspy.databinding.ItemPropertyRowBinding
 import com.udm.ezspy.databinding.ItemPropertySectionBinding
 
 class PropertiesAdapter(
-    private val onCopy: (PropertyRow) -> Unit,
+    private val onCopy: (PropertyRow, String) -> Unit,
     private val onGetText: () -> Unit,
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -26,9 +26,11 @@ class PropertiesAdapter(
     }
 
     private val items = ArrayList<Item>()
+    private var showSensitive = false
 
     @SuppressLint("NotifyDataSetChanged")
-    fun submit(node: NodeSnapshot?) {
+    fun submit(node: NodeSnapshot?, showSensitive: Boolean) {
+        this.showSensitive = showSensitive
         items.clear()
         if (node != null) {
             items.add(Item.Header(node))
@@ -69,7 +71,7 @@ class PropertiesAdapter(
         when (val item = items[position]) {
             is Item.Header -> (holder as HeaderViewHolder).bind(item.node)
             is Item.Section -> (holder as SectionViewHolder).bind(item.title)
-            is Item.Row -> (holder as RowViewHolder).bind(item.row)
+            is Item.Row -> (holder as RowViewHolder).bind(item.row, showSensitive)
         }
     }
 
@@ -104,10 +106,15 @@ class PropertiesAdapter(
         private val binding: ItemPropertyRowBinding,
     ) : RecyclerView.ViewHolder(binding.root) {
 
-        fun bind(row: PropertyRow) {
+        fun bind(row: PropertyRow, showSensitive: Boolean) {
             val context = binding.root.context
+            val value = if (row.sensitive && !showSensitive) {
+                NodeSnapshot.MASKED_TEXT
+            } else {
+                row.value
+            }
             binding.label.text = row.label
-            binding.value.text = row.value
+            binding.value.text = value
 
             val valueColor = when (row.kind) {
                 PropertyValueKind.TRUE -> R.color.color_accent
@@ -131,11 +138,11 @@ class PropertiesAdapter(
                 binding.actionButton.contentDescription = context.getString(R.string.get_text_button)
             }
 
-            binding.row.setOnClickListener { onCopy(row) }
+            binding.row.setOnClickListener { onCopy(row, value) }
             binding.row.contentDescription = buildString {
                 append(row.label)
                 append("，")
-                append(row.value)
+                append(value)
                 append("，点击复制")
             }
         }

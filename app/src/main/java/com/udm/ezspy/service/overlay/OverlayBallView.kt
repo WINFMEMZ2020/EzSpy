@@ -66,6 +66,10 @@ class OverlayBallView(context: Context) : View(context) {
         color = ContextCompat.getColor(context, R.color.overlay_ball_ring)
         style = Paint.Style.FILL
     }
+    private val recordingPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ContextCompat.getColor(context, R.color.overlay_recording)
+        style = Paint.Style.FILL
+    }
 
     private var downX = 0f
     private var downY = 0f
@@ -160,5 +164,12 @@ class OverlayBallView(context: Context) : View(context) {
         canvas.drawLine(centerX - arm, centerY, centerX + arm, centerY, crosshairPaint)
         canvas.drawLine(centerX, centerY - arm, centerX, centerY + arm, crosshairPaint)
         canvas.drawCircle(centerX, centerY, dp(2.4f), dotPaint)
+        // Red dot = a temporary capture session is active.
+        canvas.drawCircle(
+            centerX + radius * 0.56f,
+            centerY - radius * 0.56f,
+            dp(4.5f),
+            recordingPaint,
+        )
     }
 }
