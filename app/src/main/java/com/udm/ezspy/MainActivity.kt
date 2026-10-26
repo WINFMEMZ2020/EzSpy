@@ -41,6 +41,8 @@ class MainActivity : AppCompatActivity() {
         // The floating overlay is dismissed here (and, when the user opened the
         // app manually while grabbing, the current selection is kept).
         EzSpyAccessibilityService.instance?.onMainUiResumed()
+        // Enable the "task removed from recents" watchdog.
+        EzSpyAccessibilityService.instance?.onMainUiShown()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -110,6 +112,17 @@ class MainActivity : AppCompatActivity() {
 
     fun openPropertiesTab() {
         binding.pager.setCurrentItem(2, true)
+    }
+
+    override fun onDestroy() {
+        val shouldShutdown = isFinishing && !isChangingConfigurations
+        super.onDestroy()
+        if (shouldShutdown) {
+            // A true privacy exit: recents swipe / back finishes the task.
+            // Disable the accessibility service and end the process so the
+            // system cannot keep the app alive in the background.
+            EzSpyAccessibilityService.instance?.shutdownFromTaskRemoval()
+        }
     }
 
     private companion object {

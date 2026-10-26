@@ -1,11 +1,13 @@
 package com.udm.ezspy.service
 
 import android.accessibilityservice.AccessibilityService
+import android.app.ActivityManager
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Intent
 import android.content.res.Configuration
 import android.os.Handler
 import android.os.Looper
+import android.os.Process
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import com.udm.ezspy.MainActivity
@@ -26,11 +28,37 @@ class EzSpyAccessibilityService : AccessibilityService() {
             private set
 
         private const val RETURN_FALLBACK_MS = 2000L
+        private const val TASK_REMOVED_KILL_DELAY_MS = 300L
+        private const val TASK_WATCH_INTERVAL_MS = 1000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
     private var overlay: OverlayController? = null
     private var pendingUiReturn = false
+    private var shuttingDown = false
+    private var seenAppTask = false
+
+    /**
+     * The accessibility service itself is bound by the system, so a recents
+     * swipe does not reliably deliver onTaskRemoved. Once the main UI has been
+     * seen, poll the app's own task list; when it disappears the whole app is
+     * torn down (and the accessibility service disabled) so nothing keeps
+     * running in the background.
+     */
+    private val taskWatcher = object : Runnable {
+        override fun run() {
+            if (shuttingDown) return
+            val count = appTaskCount()
+            if (count > 0) {
+                seenAppTask = true
+                handler.postDelayed(this, TASK_WATCH_INTERVAL_MS)
+            } else if (seenAppTask) {
+                shutdownFromTaskRemoval()
+            } else {
+                handler.postDelayed(this, TASK_WATCH_INTERVAL_MS)
+            }
+        }
+    }
 
     private val dismissFallback = Runnable {
         if (pendingUiReturn) {
@@ -51,6 +79,10 @@ class EzSpyAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
         }
+
+        // If the service connects after the main UI is already on screen,
+        // start the recents watchdog now instead of waiting for another resume.
+        if (appTaskCount() > 0) onMainUiShown()
     }
 
     /**
@@ -147,13 +179,65 @@ class EzSpyAccessibilityService : AccessibilityService() {
         overlay?.onConfigurationChanged()
     }
 
+    /**
+     * The user swiped EzSpy out of the recents list: wipe the in-memory
+     * capture, remove the overlay, disable the accessibility service (so the
+     * system cannot rebind it and keep the app alive) and kill the process.
+     *
+     * The accessibility service has to be enabled again from system settings
+     * the next time the main UI is opened.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        shutdownFromTaskRemoval()
+        super.onTaskRemoved(rootIntent)
+    }
+
+    /**
+     * Called when the main task is removed from recents (from
+     * [MainActivity.onDestroy] when finishing, or from [onTaskRemoved] when
+     * the system happens to deliver it).
+     *
+     * Removing the accessibility service is required for a true shutdown:
+     * otherwise the system would rebind it and keep the app process alive.
+     */
+    /**
+     * Starts watching for the removal of the app's task. Called whenever the
+     * main UI is resumed (after the user has actually opened the app).
+     */
+    fun onMainUiShown() {
+        if (shuttingDown) return
+        val count = appTaskCount()
+        if (count > 0) seenAppTask = true
+        handler.removeCallbacks(taskWatcher)
+        handler.postDelayed(taskWatcher, TASK_WATCH_INTERVAL_MS)
+    }
+
+    fun shutdownFromTaskRemoval() {
+        if (shuttingDown) return
+        shuttingDown = true
+
+        handler.removeCallbacksAndMessages(null)
+        stopOverlay()
+        SpyRepository.clear()
+        runCatching { disableSelf() }
+        handler.postDelayed({
+            Process.killProcess(Process.myPid())
+        }, TASK_REMOVED_KILL_DELAY_MS)
+    }
+
+    private fun appTaskCount(): Int = runCatching {
+        getSystemService(ActivityManager::class.java)?.getAppTasks()?.size ?: 0
+    }.getOrDefault(0)
+
     override fun onUnbind(intent: Intent?): Boolean {
+        handler.removeCallbacks(taskWatcher)
         stopOverlay()
         instance = null
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(taskWatcher)
         stopOverlay()
         instance = null
         super.onDestroy()
